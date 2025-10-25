@@ -801,14 +801,13 @@ export default function Home() {
       : null);
 
   const addManagerActivity = useCallback(
-    (type: string, detail: string, meta?: string | null) => {
-      const resolvedMeta =
-        typeof meta === "string" && meta.trim().length > 0
-          ? meta
-          : copy.managerActivity.justNow;
-
+    (
+      type: string,
+      detail: string,
+      meta: string = copy.managerActivity.justNow,
+    ) => {
       setManagerActivity((previous) => [
-        { id: generateId(), type, detail, meta: resolvedMeta },
+        { id: generateId(), type, detail, meta },
         ...previous.slice(0, 7),
       ]);
     },

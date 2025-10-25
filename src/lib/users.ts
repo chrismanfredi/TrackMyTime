@@ -8,8 +8,6 @@ import { employees } from "@/db/schema";
 
 export type EmployeeRecord = typeof employees.$inferSelect;
 
-type ClerkUser = Awaited<ReturnType<typeof clerkClient.users.getUser>>;
-
 export type SyncCurrentUserResult =
   | { status: "success"; employee: EmployeeRecord }
   | { status: "error"; message: string };
@@ -22,76 +20,33 @@ export async function getEmployeeByClerkId(
   });
 }
 
-function normalizeString(value: unknown): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function resolveEmployeeEmail(clerkUserId: string, clerkUser: ClerkUser): string {
-  const fallbackEmail = `${clerkUserId}@users.clerk`;
-  const candidates = [
-    clerkUser.primaryEmailAddress?.emailAddress,
-    clerkUser.emailAddresses?.[0]?.emailAddress,
-  ];
-
-  for (const candidate of candidates) {
-    const normalized = normalizeString(candidate);
-    if (normalized) {
-      return normalized;
-    }
-  }
-
-  return fallbackEmail;
-}
-
-function resolveEmployeeFullName(
-  clerkUser: ClerkUser,
-  email: string,
-  fallbackEmail: string,
-): string {
-  const providedFullName = normalizeString(clerkUser.fullName);
-  if (providedFullName) {
-    return providedFullName;
-  }
-
-  const combinedName =
-    [normalizeString(clerkUser.firstName), normalizeString(clerkUser.lastName)]
-      .filter((value): value is string => Boolean(value))
-      .join(" ");
-  if (combinedName.length > 0) {
-    return combinedName;
-  }
-
-  const usernameFallback = normalizeString(clerkUser.username);
-  if (usernameFallback) {
-    return usernameFallback;
-  }
-
-  const normalizedEmail = normalizeString(email);
-  if (normalizedEmail) {
-    return normalizedEmail;
-  }
-
-  return fallbackEmail;
-}
-
 async function createOrUpdateEmployeeFromClerk(
   clerkUserId: string,
 ): Promise<EmployeeRecord | null> {
   const clerkUser = await clerkClient.users.getUser(clerkUserId);
 
-  const fallbackEmail = `${clerkUserId}@users.clerk`;
-  const email = resolveEmployeeEmail(clerkUserId, clerkUser);
-  const fullName = resolveEmployeeFullName(clerkUser, email, fallbackEmail);
-  const photoUrl = normalizeString(clerkUser.imageUrl) ?? null;
-  const roleMetadata = normalizeString(clerkUser.publicMetadata?.role);
-  const teamMetadata = normalizeString(clerkUser.publicMetadata?.team);
-  const role = roleMetadata ?? "employee";
-  const team = teamMetadata ?? null;
+  const email =
+    clerkUser.primaryEmailAddress?.emailAddress ??
+    clerkUser.emailAddresses?.[0]?.emailAddress ??
+    null;
+  const fullName =
+    clerkUser.fullName ??
+    [clerkUser.firstName, clerkUser.lastName]
+      .filter((value): value is string => Boolean(value && value.length > 0))
+      .join(" ") ||
+    clerkUser.username ??
+    email;
+  const photoUrl = clerkUser.imageUrl ?? null;
+  const roleMetadata = clerkUser.publicMetadata?.role;
+  const teamMetadata = clerkUser.publicMetadata?.team;
+  const role =
+    typeof roleMetadata === "string" && roleMetadata.trim().length > 0
+      ? roleMetadata
+      : "employee";
+  const team =
+    typeof teamMetadata === "string" && teamMetadata.trim().length > 0
+      ? teamMetadata
+      : null;
   const metadata =
     clerkUser.publicMetadata &&
     Object.keys(clerkUser.publicMetadata).length > 0
@@ -105,7 +60,7 @@ async function createOrUpdateEmployeeFromClerk(
     updatedAt: new Date(),
   };
 
-  if (roleMetadata) {
+  if (typeof roleMetadata === "string" && roleMetadata.trim().length > 0) {
     updateValues.role = roleMetadata;
   }
 
