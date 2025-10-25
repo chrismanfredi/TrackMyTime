@@ -42,6 +42,34 @@ export const employees = pgTable(
   }),
 );
 
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    employeeId: uuid("employee_id")
+      .notNull()
+      .references(() => employees.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    type: varchar("type", { length: 100 }).notNull(),
+    startDate: date("start_date").notNull(),
+    endDate: date("end_date"),
+    hours: integer("hours").notNull(),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    employeeIdx: index("tasks_employee_id_idx").on(table.employeeId),
+    startDateIdx: index("tasks_start_date_idx").on(table.startDate),
+  }),
+);
+
 export const timeOffRequests = pgTable(
   "time_off_requests",
   {
