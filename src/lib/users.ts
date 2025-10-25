@@ -25,10 +25,12 @@ async function createOrUpdateEmployeeFromClerk(
 ): Promise<EmployeeRecord | null> {
   const clerkUser = await clerkClient.users.getUser(clerkUserId);
 
-  const email =
+  const fallbackEmail = `${clerkUserId}@users.clerk`;
+  const primaryEmail =
     clerkUser.primaryEmailAddress?.emailAddress ??
     clerkUser.emailAddresses?.[0]?.emailAddress ??
     null;
+  const email = primaryEmail ?? fallbackEmail;
   const providedFullName =
     typeof clerkUser.fullName === "string" && clerkUser.fullName.trim().length > 0
       ? clerkUser.fullName
@@ -44,7 +46,8 @@ async function createOrUpdateEmployeeFromClerk(
     providedFullName ??
     (combinedName.length > 0 ? combinedName : null) ??
     usernameFallback ??
-    email;
+    primaryEmail ??
+    fallbackEmail;
   const photoUrl = clerkUser.imageUrl ?? null;
   const roleMetadata = clerkUser.publicMetadata?.role;
   const teamMetadata = clerkUser.publicMetadata?.team;
