@@ -5,17 +5,19 @@ const AUTHORIZED_ROLES = ["manager", "director", "admin", "people ops"];
 
 export const runtime = "nodejs";
 
-type RouteContext = {
-  params?: Promise<Record<string, string | string[] | undefined>>;
+type RouteParams = {
+  id?: string | string[];
 };
 
-export async function PATCH(request: NextRequest, context: RouteContext) {
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: RouteParams },
+) {
   const overrideHeaderName =
     request.headers.get("x-manager-override")?.trim() ?? "";
   const normalizedOverrideName = overrideHeaderName.toLowerCase();
   const headerOverrideActive = normalizedOverrideName.includes("chris manfredi");
 
-  const params = await context.params;
   const rawId = params?.id;
   const requestId = Array.isArray(rawId) ? rawId[0] : rawId;
   if (!requestId) {
