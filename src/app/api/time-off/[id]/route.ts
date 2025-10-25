@@ -5,14 +5,25 @@ const AUTHORIZED_ROLES = ["manager", "director", "admin", "people ops"];
 
 export const runtime = "nodejs";
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { id: string } },
-) {
+type RouteContext = {
+  params?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export async function PATCH(request: NextRequest, context: RouteContext) {
   const overrideHeaderName =
     request.headers.get("x-manager-override")?.trim() ?? "";
   const normalizedOverrideName = overrideHeaderName.toLowerCase();
   const headerOverrideActive = normalizedOverrideName.includes("chris manfredi");
+
+  const params = await context.params;
+  const rawId = params?.id;
+  const requestId = Array.isArray(rawId) ? rawId[0] : rawId;
+  if (!requestId) {
+    return NextResponse.json(
+      { ok: false, error: "Request ID is required." },
+      { status: 400 },
+    );
+  }
 
   const { userId } = await getAuth(request as unknown as Request);
   if (!userId && !headerOverrideActive) {
@@ -76,7 +87,7 @@ export async function PATCH(
 
   return NextResponse.json({
     ok: true,
-    requestId: params.id,
+    requestId,
     status: normalized === "approved" ? "Approved" : "Denied",
     actedBy:
       overrideHeaderName ||
