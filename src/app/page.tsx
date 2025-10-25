@@ -2,7 +2,21 @@
 
 import { SignedIn, SignedOut, SignInButton, useUser } from "@clerk/nextjs";
 import { DashboardShell } from "@/components/dashboard-shell";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useActionState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import {
+  CREATE_TASK_INITIAL_STATE,
+  CreateTaskField,
+  createTaskAction,
+} from "@/lib/requests";
+import { syncCurrentUser } from "@/lib/users";
 
 type RequestStatus = "Pending" | "Approved" | "Denied";
 
@@ -27,6 +41,10 @@ type NewRequestFormState = {
   hours: string;
   note: string;
 };
+
+type RequestBanner =
+  | { tone: "success" }
+  | { tone: "error"; message: string };
 
 type ManagerActivity = {
   id: string;
@@ -627,7 +645,15 @@ export default function Home() {
     useState<TimeOffRequest[]>(initialTimeOffRequests);
   const [newRequest, setNewRequest] =
     useState<NewRequestFormState>(initialNewRequest);
-  const [requestMessage, setRequestMessage] = useState<string | null>(null);
+  const [requestBanner, setRequestBanner] =
+    useState<RequestBanner | null>(null);
+  const [requestFieldErrors, setRequestFieldErrors] =
+    useState<Partial<Record<CreateTaskField, string>>>({});
+  const [createTaskState, createTaskFormAction, isCreatingTask] = useActionState(
+    createTaskAction,
+    CREATE_TASK_INITIAL_STATE,
+  );
+  const lastCreatedTaskIdRef = useRef<string | null>(null);
   const selfServiceRef = useRef<HTMLDivElement | null>(null);
   const [managerActivity, setManagerActivity] = useState<ManagerActivity[]>(() => [
     {
@@ -657,10 +683,13 @@ export default function Home() {
 
   const quickFilterLabels = copy.quickFilters;
 
-  const getRequestTypeLabel = (type: string) =>
-    copy.requestTypeLabels[
-      type as (typeof requestTypes)[number]
-    ] ?? type;
+  const getRequestTypeLabel = useCallback(
+    (type: string) =>
+      copy.requestTypeLabels[
+        type as (typeof requestTypes)[number]
+      ] ?? type,
+    [copy.requestTypeLabels],
+  );
 
   const renderLanguageSelector = (
     labelClassName = "",
@@ -771,79 +800,121 @@ export default function Home() {
         : copy.managerMessages.signInManager
       : null);
 
-  const addManagerActivity = (
-    type: string,
-    detail: string,
-    meta = copy.managerActivity.justNow,
-  ) => {
-    setManagerActivity((previous) => [
-      { id: generateId(), type, detail, meta },
-      ...previous.slice(0, 7),
-    ]);
+  const addManagerActivity = useCallback(
+    (
+      type: string,
+      detail: string,
+      meta: string = copy.managerActivity.justNow,
+    ) => {
+      setManagerActivity((previous) => [
+        { id: generateId(), type, detail, meta },
+        ...previous.slice(0, 7),
+      ]);
+    },
+    [copy.managerActivity.justNow],
+  );
+
+  const clearFieldError = (field: CreateTaskField) => {
+    setRequestFieldErrors((previous) => {
+      if (!previous[field]) {
+        return previous;
+      }
+      const next = { ...previous };
+      delete next[field];
+      return next;
+    });
+    setRequestBanner((previous) =>
+      previous?.tone === "error" ? null : previous,
+    );
   };
 
-  const handleRequestSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (!isSignedIn || !user) {
+  useEffect(() => {
+    if (!isSignedIn) {
+      setRequestBanner(null);
+      setRequestFieldErrors({});
+      setNewRequest(initialNewRequest);
       return;
     }
 
-    if (!newRequest.startDate) {
-      setRequestMessage(copy.validation.startDateRequired);
-      return;
-    }
+    let cancelled = false;
 
-    const start = isoDate(newRequest.startDate);
-    const end = isoDate(newRequest.endDate);
+    void (async () => {
+      const result = await syncCurrentUser();
+      if (!cancelled && result.status === "error") {
+        console.error("Failed to sync Clerk user", result.message);
+      }
+    })();
 
-    if (end && start && end < start) {
-      setRequestMessage(copy.validation.endDateInvalid);
-      return;
-    }
-
-    const hoursValue = Number(newRequest.hours);
-    if (!Number.isFinite(hoursValue) || hoursValue <= 0) {
-      setRequestMessage(copy.validation.hoursInvalid);
-      return;
-    }
-
-    const endDateValue = newRequest.endDate || newRequest.startDate;
-    const formattedDates = formatDateRange(
-      newRequest.startDate,
-      endDateValue,
-    );
-    const trimmedNote = newRequest.note.trim();
-    const requestedType = newRequest.type;
-    const requestedTypeLabel = getRequestTypeLabel(requestedType);
-    const roleForRequest = userRoleLabel;
-
-    const newEntry: TimeOffRequest = {
-      id: generateId(),
-      employee: userDisplayName,
-      role: roleForRequest,
-      type: requestedType,
-      status: "Pending",
-      dates: formattedDates,
-      startDateISO: newRequest.startDate,
-      endDateISO: endDateValue,
-      hours: hoursValue,
-      submitted: formatSubmittedDate(),
-      notes: trimmedNote || undefined,
+    return () => {
+      cancelled = true;
     };
+  }, [isSignedIn]);
 
-    setRequests((previous) => [newEntry, ...previous]);
-    setNewRequest(initialNewRequest);
-    setRequestMessage(copy.newRequestCard.successMessage);
-    addManagerActivity(
-      copy.managerActivity.submittedType,
-      copy.managerActivity.submittedDetail(
-        userDisplayName,
-        requestedTypeLabel,
-        formattedDates,
-      ),
-    );
-  };
+  useEffect(() => {
+    if (createTaskState.status === "success" && createTaskState.task) {
+      if (lastCreatedTaskIdRef.current === createTaskState.task.id) {
+        return;
+      }
+
+      lastCreatedTaskIdRef.current = createTaskState.task.id;
+      setRequestFieldErrors({});
+      setRequestBanner({ tone: "success" });
+      setNewRequest(initialNewRequest);
+
+      const endDateValue =
+        createTaskState.task.endDate ?? createTaskState.task.startDate;
+      const formattedDates = formatDateRange(
+        createTaskState.task.startDate,
+        endDateValue,
+      );
+
+      setRequests((previous) => [
+        {
+          id: createTaskState.task.id,
+          employee: userDisplayName,
+          role: userRoleLabel,
+          type: createTaskState.task.type,
+          status: "Pending",
+          dates: formattedDates,
+          startDateISO: createTaskState.task.startDate,
+          endDateISO: endDateValue,
+          hours: createTaskState.task.hours,
+          submitted: formatSubmittedDate(),
+          notes: createTaskState.task.note ?? undefined,
+        },
+        ...previous,
+      ]);
+
+      addManagerActivity(
+        copy.managerActivity.submittedType,
+        copy.managerActivity.submittedDetail(
+          userDisplayName,
+          getRequestTypeLabel(createTaskState.task.type),
+          formattedDates,
+        ),
+      );
+    } else if (createTaskState.status === "error") {
+      lastCreatedTaskIdRef.current = null;
+      setRequestFieldErrors(createTaskState.fieldErrors ?? {});
+      const fallbackMessage =
+        createTaskState.message ??
+        Object.values(createTaskState.fieldErrors ?? {}).find((value) =>
+          Boolean(value),
+        ) ??
+        copy.managerMessages.updateFailed;
+      setRequestBanner({ tone: "error", message: fallbackMessage });
+    } else if (createTaskState.status === "idle") {
+      lastCreatedTaskIdRef.current = null;
+    }
+  }, [
+    addManagerActivity,
+    copy.managerActivity,
+    copy.managerMessages.updateFailed,
+    createTaskState,
+    getRequestTypeLabel,
+    userDisplayName,
+    userRoleLabel,
+  ]);
 
   useEffect(() => {
     if (!showNewRequestModal) {
@@ -927,29 +998,6 @@ export default function Home() {
     setActioningRequestId(id);
 
     try {
-      const response = await fetch(`/api/time-off/${id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(managerOverrideRole
-            ? { "X-Manager-Override": userDisplayName }
-            : {}),
-        },
-        body: JSON.stringify({ status }),
-      });
-
-      const payload = (await response.json()) as
-        | { ok: true; status: RequestStatus }
-        | { ok: false; error?: string };
-
-      if (!response.ok || !("ok" in payload) || !payload.ok) {
-        const errorMessage =
-          ("error" in payload && payload.error) ||
-          copy.managerMessages.updateFailed;
-        setManagerFeedback(errorMessage);
-        return;
-      }
-
       const updated = applyRequestStatusChange(id, status);
       if (!updated) {
         setManagerFeedback(copy.managerMessages.requestUpdateError);
@@ -965,7 +1013,7 @@ export default function Home() {
       setManagerFeedback(
         copy.managerMessages.success(
           updated.employee,
-          copy.statusLabels[payload.status],
+          copy.statusLabels[status],
           userDisplayName,
         ),
       );
@@ -1038,24 +1086,36 @@ export default function Home() {
             {userRoleLabel} • {userEmail}
           </p>
         </div>
-        {requestMessage && (
-          <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
-            {requestMessage}
+        {requestBanner && (
+          <p
+            className={`mt-3 rounded-xl px-3 py-2 text-xs font-medium ${
+              requestBanner.tone === "success"
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-rose-50 text-rose-700"
+            }`}
+          >
+            {requestBanner.tone === "success"
+              ? copy.newRequestCard.successMessage
+              : requestBanner.message}
           </p>
         )}
-        <form className="mt-4 space-y-4" onSubmit={handleRequestSubmit}>
+        <form className="mt-4 space-y-4">
           <div className="grid gap-1">
             <label className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
               {copy.newRequestCard.form.type}
             </label>
             <select
+              name="type"
               value={newRequest.type}
-              onChange={(event) =>
+              onChange={(event) => {
+                const { value } = event.target;
                 setNewRequest((previous) => ({
                   ...previous,
-                  type: event.target.value,
-                }))
-              }
+                  type: value,
+                }));
+                clearFieldError("type");
+              }}
+              aria-invalid={Boolean(requestFieldErrors.type)}
               className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200/60"
             >
               {requestTypes.map((type) => (
@@ -1064,6 +1124,9 @@ export default function Home() {
                 </option>
               ))}
             </select>
+            {requestFieldErrors.type && (
+              <p className="text-xs text-rose-600">{requestFieldErrors.type}</p>
+            )}
           </div>
           <div className="grid gap-1 sm:grid-cols-2 sm:gap-4">
             <div className="grid gap-1">
@@ -1071,32 +1134,50 @@ export default function Home() {
                 {copy.newRequestCard.form.startDate}
               </label>
               <input
+                name="startDate"
                 type="date"
                 value={newRequest.startDate}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const { value } = event.target;
                   setNewRequest((previous) => ({
                     ...previous,
-                    startDate: event.target.value,
-                  }))
-                }
+                    startDate: value,
+                  }));
+                  clearFieldError("startDate");
+                }}
+                aria-invalid={Boolean(requestFieldErrors.startDate)}
                 className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200/60"
               />
+              {requestFieldErrors.startDate && (
+                <p className="text-xs text-rose-600">
+                  {requestFieldErrors.startDate}
+                </p>
+              )}
             </div>
             <div className="grid gap-1">
               <label className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
                 {copy.newRequestCard.form.endDate}
               </label>
               <input
+                name="endDate"
                 type="date"
                 value={newRequest.endDate}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const { value } = event.target;
                   setNewRequest((previous) => ({
                     ...previous,
-                    endDate: event.target.value,
-                  }))
-                }
+                    endDate: value,
+                  }));
+                  clearFieldError("endDate");
+                }}
+                aria-invalid={Boolean(requestFieldErrors.endDate)}
                 className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200/60"
               />
+              {requestFieldErrors.endDate && (
+                <p className="text-xs text-rose-600">
+                  {requestFieldErrors.endDate}
+                </p>
+              )}
             </div>
           </div>
           <div className="grid gap-1">
@@ -1104,38 +1185,55 @@ export default function Home() {
               {copy.newRequestCard.form.hours}
             </label>
             <input
+              name="hours"
               type="number"
               min="1"
+              step="1"
               value={newRequest.hours}
-              onChange={(event) =>
+              onChange={(event) => {
+                const { value } = event.target;
                 setNewRequest((previous) => ({
                   ...previous,
-                  hours: event.target.value,
-                }))
-              }
+                  hours: value,
+                }));
+                clearFieldError("hours");
+              }}
+              aria-invalid={Boolean(requestFieldErrors.hours)}
               className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200/60"
             />
+            {requestFieldErrors.hours && (
+              <p className="text-xs text-rose-600">{requestFieldErrors.hours}</p>
+            )}
           </div>
           <div className="grid gap-1">
             <label className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
               {copy.newRequestCard.form.notes}
             </label>
             <textarea
+              name="note"
               value={newRequest.note}
-              onChange={(event) =>
+              onChange={(event) => {
+                const { value } = event.target;
                 setNewRequest((previous) => ({
                   ...previous,
-                  note: event.target.value,
-                }))
-              }
+                  note: value,
+                }));
+                clearFieldError("note");
+              }}
+              aria-invalid={Boolean(requestFieldErrors.note)}
               rows={3}
               className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200/60"
               placeholder={copy.newRequestCard.form.notesPlaceholder}
             />
+            {requestFieldErrors.note && (
+              <p className="text-xs text-rose-600">{requestFieldErrors.note}</p>
+            )}
           </div>
           <button
             type="submit"
-            className="w-full rounded-xl bg-indigo-600 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-200/60 transition hover:bg-indigo-500"
+            formAction={createTaskFormAction}
+            disabled={isCreatingTask}
+            className="w-full rounded-xl bg-indigo-600 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-200/60 transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {copy.newRequestCard.form.submit}
           </button>
