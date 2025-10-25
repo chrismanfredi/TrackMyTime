@@ -5,13 +5,10 @@ const AUTHORIZED_ROLES = ["manager", "director", "admin", "people ops"];
 
 export const runtime = "nodejs";
 
-type Params = {
-  params: {
-    id: string;
-  };
-};
-
-export async function PATCH(request: NextRequest, { params }: Params) {
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } },
+) {
   const overrideHeaderName =
     request.headers.get("x-manager-override")?.trim() ?? "";
   const normalizedOverrideName = overrideHeaderName.toLowerCase();
