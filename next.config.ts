@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    // Ensure API routes run on the Node.js runtime where Clerk server helpers are supported
+    typedRoutes: true,
+  },
 };
 
 export default nextConfig;
