@@ -312,8 +312,10 @@ export default function TimeOffCalendarPage() {
   };
 
   useEffect(() => {
-    setManagerFeedback(null);
-    setActioningRequestId(null);
+    queueMicrotask(() => {
+      setManagerFeedback(null);
+      setActioningRequestId(null);
+    });
   }, [activeRequestContext?.request.id]);
 
   const loadSnapshots = useCallback(() => {
@@ -368,7 +370,7 @@ export default function TimeOffCalendarPage() {
       return;
     }
 
-    loadSnapshots();
+    queueMicrotask(loadSnapshots);
 
     const handleStorage = (event: StorageEvent) => {
       if (event.key === APPROVED_REQUESTS_STORAGE_KEY) {
@@ -499,19 +501,8 @@ export default function TimeOffCalendarPage() {
     [],
   );
 
-  type UpdateResponseSuccess = {
-    ok: true;
-    status: CalendarStatus;
-    actedBy?: string;
-  };
-
-  type UpdateResponseError = {
-    ok: false;
-    error?: string;
-  };
-
   const processRequestStatusChange = useCallback(
-    async (targetRequest: CalendarRequest, nextStatus: Exclude<CalendarStatus, "Pending">) => {
+    (targetRequest: CalendarRequest, nextStatus: Exclude<CalendarStatus, "Pending">) => {
       if (!isSignedIn || !user) {
         setManagerFeedback(MANAGER_MESSAGES.signIn);
         return;
@@ -531,40 +522,16 @@ export default function TimeOffCalendarPage() {
       setActioningRequestId(targetRequest.id);
 
       try {
-        const response = await fetch(`/api/time-off/${targetRequest.id}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            ...(managerOverride ? { "X-Manager-Override": userDisplayName } : {}),
-          },
-          body: JSON.stringify({ status: nextStatus }),
-        });
-
-        const payload = (await response.json()) as
-          | UpdateResponseSuccess
-          | UpdateResponseError;
-
-        if (!response.ok || !("ok" in payload) || !payload.ok) {
-          const message =
-            "error" in payload && payload.error
-              ? payload.error
-              : MANAGER_MESSAGES.updateFailed;
-          setManagerFeedback(message);
-          return;
-        }
-
-        const updatedStatus = payload.status;
-        const actedBy = payload.actedBy ?? userDisplayName;
         const updatedRequest: CalendarRequest = {
           ...targetRequest,
-          status: updatedStatus,
+          status: nextStatus,
         };
 
-        updateRequestStatusLocally(updatedRequest, updatedStatus);
-        persistSnapshotUpdate(updatedRequest, updatedStatus);
+        updateRequestStatusLocally(updatedRequest, nextStatus);
+        persistSnapshotUpdate(updatedRequest, nextStatus);
 
         setManagerFeedback(
-          `${updatedRequest.employee} marked as ${updatedStatus.toLowerCase()} by ${actedBy}.`,
+          `${updatedRequest.employee} marked as ${nextStatus.toLowerCase()} by ${userDisplayName}.`,
         );
 
         loadSnapshots();
@@ -574,15 +541,14 @@ export default function TimeOffCalendarPage() {
             ? error.message
             : MANAGER_MESSAGES.updateFailed,
         );
-      } finally {
-        setActioningRequestId(null);
       }
+
+      setActioningRequestId(null);
     },
     [
       isSignedIn,
       user,
       managerCanReview,
-      managerOverride,
       userDisplayName,
       updateRequestStatusLocally,
       persistSnapshotUpdate,
