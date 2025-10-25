@@ -20,6 +20,15 @@ export async function getEmployeeByClerkId(
   });
 }
 
+function normalizeString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 async function createOrUpdateEmployeeFromClerk(
   clerkUserId: string,
 ): Promise<EmployeeRecord | null> {
@@ -27,38 +36,28 @@ async function createOrUpdateEmployeeFromClerk(
 
   const fallbackEmail = `${clerkUserId}@users.clerk`;
   const primaryEmail =
-    clerkUser.primaryEmailAddress?.emailAddress ??
-    clerkUser.emailAddresses?.[0]?.emailAddress ??
+    normalizeString(clerkUser.primaryEmailAddress?.emailAddress) ??
+    normalizeString(clerkUser.emailAddresses?.[0]?.emailAddress) ??
     null;
   const email = primaryEmail ?? fallbackEmail;
-  const providedFullName =
-    typeof clerkUser.fullName === "string" && clerkUser.fullName.trim().length > 0
-      ? clerkUser.fullName
-      : null;
-  const combinedName = [clerkUser.firstName, clerkUser.lastName]
-    .filter((value): value is string => Boolean(value && value.length > 0))
-    .join(" ");
-  const usernameFallback =
-    typeof clerkUser.username === "string" && clerkUser.username.trim().length > 0
-      ? clerkUser.username
-      : null;
-  const fullName =
+  const providedFullName = normalizeString(clerkUser.fullName);
+  const combinedName =
+    [normalizeString(clerkUser.firstName), normalizeString(clerkUser.lastName)]
+      .filter((value): value is string => Boolean(value))
+      .join(" ");
+  const usernameFallback = normalizeString(clerkUser.username);
+  const resolvedFullName =
     providedFullName ??
     (combinedName.length > 0 ? combinedName : null) ??
     usernameFallback ??
     primaryEmail ??
     fallbackEmail;
+  const fullName = normalizeString(resolvedFullName) ?? fallbackEmail;
   const photoUrl = clerkUser.imageUrl ?? null;
-  const roleMetadata = clerkUser.publicMetadata?.role;
-  const teamMetadata = clerkUser.publicMetadata?.team;
-  const role =
-    typeof roleMetadata === "string" && roleMetadata.trim().length > 0
-      ? roleMetadata
-      : "employee";
-  const team =
-    typeof teamMetadata === "string" && teamMetadata.trim().length > 0
-      ? teamMetadata
-      : null;
+  const roleMetadata = normalizeString(clerkUser.publicMetadata?.role);
+  const teamMetadata = normalizeString(clerkUser.publicMetadata?.team);
+  const role = roleMetadata ?? "employee";
+  const team = teamMetadata ?? null;
   const metadata =
     clerkUser.publicMetadata &&
     Object.keys(clerkUser.publicMetadata).length > 0
@@ -72,7 +71,7 @@ async function createOrUpdateEmployeeFromClerk(
     updatedAt: new Date(),
   };
 
-  if (typeof roleMetadata === "string" && roleMetadata.trim().length > 0) {
+  if (roleMetadata) {
     updateValues.role = roleMetadata;
   }
 
