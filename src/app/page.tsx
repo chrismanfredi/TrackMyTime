@@ -851,36 +851,34 @@ export default function Home() {
   }, [isSignedIn]);
 
   useEffect(() => {
-    if (createTaskState.status === "success" && createTaskState.task) {
-      if (lastCreatedTaskIdRef.current === createTaskState.task.id) {
+    const { status, task, fieldErrors, message } = createTaskState;
+
+    if (status === "success" && task) {
+      if (lastCreatedTaskIdRef.current === task.id) {
         return;
       }
 
-      lastCreatedTaskIdRef.current = createTaskState.task.id;
+      lastCreatedTaskIdRef.current = task.id;
       setRequestFieldErrors({});
       setRequestBanner({ tone: "success" });
       setNewRequest(initialNewRequest);
 
-      const endDateValue =
-        createTaskState.task.endDate ?? createTaskState.task.startDate;
-      const formattedDates = formatDateRange(
-        createTaskState.task.startDate,
-        endDateValue,
-      );
+      const endDateValue = task.endDate ?? task.startDate;
+      const formattedDates = formatDateRange(task.startDate, endDateValue);
 
       setRequests((previous) => [
         {
-          id: createTaskState.task.id,
+          id: task.id,
           employee: userDisplayName,
           role: userRoleLabel,
-          type: createTaskState.task.type,
+          type: task.type,
           status: "Pending",
           dates: formattedDates,
-          startDateISO: createTaskState.task.startDate,
+          startDateISO: task.startDate,
           endDateISO: endDateValue,
-          hours: createTaskState.task.hours,
+          hours: task.hours,
           submitted: formatSubmittedDate(),
-          notes: createTaskState.task.note ?? undefined,
+          notes: task.note ?? undefined,
         },
         ...previous,
       ]);
@@ -889,21 +887,19 @@ export default function Home() {
         copy.managerActivity.submittedType,
         copy.managerActivity.submittedDetail(
           userDisplayName,
-          getRequestTypeLabel(createTaskState.task.type),
+          getRequestTypeLabel(task.type),
           formattedDates,
         ),
       );
-    } else if (createTaskState.status === "error") {
+    } else if (status === "error") {
       lastCreatedTaskIdRef.current = null;
-      setRequestFieldErrors(createTaskState.fieldErrors ?? {});
+      setRequestFieldErrors(fieldErrors ?? {});
       const fallbackMessage =
-        createTaskState.message ??
-        Object.values(createTaskState.fieldErrors ?? {}).find((value) =>
-          Boolean(value),
-        ) ??
+        message ??
+        Object.values(fieldErrors ?? {}).find((value) => Boolean(value)) ??
         copy.managerMessages.updateFailed;
       setRequestBanner({ tone: "error", message: fallbackMessage });
-    } else if (createTaskState.status === "idle") {
+    } else if (status === "idle") {
       lastCreatedTaskIdRef.current = null;
     }
   }, [
