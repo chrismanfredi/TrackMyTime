@@ -51,14 +51,21 @@ async function createOrUpdateEmployeeFromClerk(
     clerkUser.username ??
     clerkUser.id;
 
-  const fullName =
-    normalized?.displayName ??
-    clerkUser.fullName ??
-    [clerkUser.firstName, clerkUser.lastName]
-      .filter((value): value is string => Boolean(value && value.length > 0))
-      .join(" ") ||
-    clerkUser.username ||
-    email;
+  const fallbackFullName = [clerkUser.firstName, clerkUser.lastName]
+    .filter((value): value is string => Boolean(value && value.length > 0))
+    .join(" ");
+
+  const fullNameCandidates: Array<string | null | undefined> = [
+    normalized?.displayName,
+    clerkUser.fullName,
+    fallbackFullName.length > 0 ? fallbackFullName : undefined,
+    clerkUser.username,
+    email,
+  ];
+
+  const fullName = fullNameCandidates.find(
+    (value): value is string => Boolean(value && value.trim().length > 0),
+  )!;
 
   const updateValues: Record<string, unknown> = {
     email,
