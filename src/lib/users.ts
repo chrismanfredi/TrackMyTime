@@ -16,9 +16,10 @@ export type SyncCurrentUserResult =
 export async function getEmployeeByClerkId(
   clerkUserId: string,
 ): Promise<EmployeeRecord | null> {
-  return db.query.employees.findFirst({
+  const record = await db.query.employees.findFirst({
     where: eq(employees.clerkUserId, clerkUserId),
   });
+  return record ?? null;
 }
 
 async function createOrUpdateEmployeeFromClerk(
