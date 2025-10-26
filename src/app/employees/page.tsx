@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { DashboardShell } from "@/components/dashboard-shell";
+import { DashboardShell, type DashboardNavItem } from "@/components/dashboard-shell";
 
 type Employee = {
   id: string;
@@ -55,7 +55,7 @@ const employees: Employee[] = [
   },
 ];
 
-const navigation = [
+const navigation: DashboardNavItem[] = [
   { label: "Overview", href: "/", active: false },
   { label: "Employees", href: "/employees", active: true },
   { label: "Time Off", href: "/time-off", active: false },

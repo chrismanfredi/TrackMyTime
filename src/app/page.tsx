@@ -1,7 +1,7 @@
 "use client";
 
 import { SignedIn, SignedOut, SignInButton, useUser } from "@clerk/nextjs";
-import { DashboardShell } from "@/components/dashboard-shell";
+import { DashboardShell, type DashboardNavItem } from "@/components/dashboard-shell";
 import {
   useActionState,
   useCallback,
@@ -672,7 +672,7 @@ export default function Home() {
     null,
   );
 
-  const navigation = useMemo(
+  const navigation = useMemo<DashboardNavItem[]>(
     () => [
       { label: copy.nav.overview, href: "/", active: true },
       { label: copy.nav.employees, href: "/employees", active: false },

@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 
-type NavItem = {
+export type DashboardNavItem = {
   label: string;
-  href: string;
+  href: Route;
   active?: boolean;
 };
 
 type DashboardShellProps = {
-  navigation: NavItem[];
+  navigation: DashboardNavItem[];
   children: React.ReactNode;
   title: string;
   subtitle?: string;

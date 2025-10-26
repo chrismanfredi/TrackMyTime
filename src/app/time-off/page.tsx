@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { DashboardShell } from "@/components/dashboard-shell";
+import { DashboardShell, type DashboardNavItem } from "@/components/dashboard-shell";
 import { useUser } from "@clerk/nextjs";
 
 type CalendarStatus = "Pending" | "Approved" | "Denied";
@@ -50,7 +50,7 @@ const CALENDAR_ACTION_LABELS: Record<Exclude<CalendarStatus, "Pending">, string>
   Denied: "Deny",
 };
 
-const navigation = [
+const navigation: DashboardNavItem[] = [
   { label: "Overview", href: "/", active: false },
   { label: "Employees", href: "/employees", active: false },
   { label: "Time Off", href: "/time-off", active: true },
