@@ -100,7 +100,7 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const { userId } = await getAuth();
+  const { userId } = await getAuth(undefined);
   if (!userId) {
     return NextResponse.json(
       { ok: false, error: "Authentication required." },

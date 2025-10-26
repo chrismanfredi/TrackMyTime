@@ -130,7 +130,7 @@ export async function getOrCreateEmployeeByClerkId(
 }
 
 export async function syncCurrentUser(): Promise<SyncCurrentUserResult> {
-  const { userId } = await getAuth();
+  const { userId } = await getAuth(undefined);
   if (!userId) {
     return { status: "error", message: "Not authenticated." };
   }

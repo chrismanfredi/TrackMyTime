@@ -112,7 +112,7 @@ export async function createTaskAction(
   _prevState: CreateTaskActionState,
   formData: FormData,
 ): Promise<CreateTaskActionState> {
-  const { userId } = await getAuth();
+  const { userId } = await getAuth(undefined);
   if (!userId) {
     return {
       status: "error",
