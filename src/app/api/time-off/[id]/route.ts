@@ -21,12 +21,6 @@ const STATUS_LABELS = {
   cancelled: "Denied",
 } as const;
 
-type Params = {
-  params: {
-    id: string;
-  };
-};
-
 function normalizeRoleTokens(role: unknown): string[] {
   if (Array.isArray(role)) {
     return role
@@ -94,7 +88,11 @@ function mapDbRequest(row: {
   };
 }
 
-export async function PATCH(request: NextRequest, { params }: Params) {
+export async function PATCH(
+  request: NextRequest,
+  context: { params: { id: string } },
+) {
+  const { params } = context;
   const { userId } = auth();
   if (!userId) {
     return NextResponse.json(
