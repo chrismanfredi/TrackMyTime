@@ -935,14 +935,12 @@ export default function Home() {
     setOpenDetailsRequestId((previous) => (previous === id ? null : id));
   };
 
-  const applyRequestStatusChange = (
-    id: string,
-    status: RequestStatus,
-  ): TimeOffRequest | null => {
-    let foundRequest: TimeOffRequest | null = null;
-    let statusChanged = false;
-    setRequests((previous) =>
-      previous.map((request) => {
+  const applyRequestStatusChange = useCallback(
+    (id: string, status: RequestStatus): TimeOffRequest | null => {
+      let foundRequest: TimeOffRequest | null = null;
+      let statusChanged = false;
+
+      const nextRequests = requests.map((request) => {
         if (request.id !== id) {
           return request;
         }
@@ -954,27 +952,37 @@ export default function Home() {
         foundRequest = updated;
         statusChanged = true;
         return updated;
-      }),
-    );
+      });
 
-    if (!foundRequest) {
-      return null;
-    }
+      if (!foundRequest) {
+        return null;
+      }
 
-    if (statusChanged) {
-      const statusKey = status as Exclude<RequestStatus, "Pending">;
-      addManagerActivity(
-        copy.managerActivity.statusTitles[statusKey],
-        copy.managerActivity.statusDetails[statusKey](
-          foundRequest.employee,
-          getRequestTypeLabel(foundRequest.type),
-          foundRequest.dates,
-        ),
-      );
-    }
+      if (statusChanged) {
+        setRequests(nextRequests);
 
-    return foundRequest;
-  };
+        if (status !== "Pending") {
+          addManagerActivity(
+            copy.managerActivity.statusTitles[status],
+            copy.managerActivity.statusDetails[status](
+              foundRequest.employee,
+              getRequestTypeLabel(foundRequest.type),
+              foundRequest.dates,
+            ),
+          );
+        }
+      }
+
+      return foundRequest;
+    },
+    [
+      addManagerActivity,
+      copy.managerActivity.statusDetails,
+      copy.managerActivity.statusTitles,
+      getRequestTypeLabel,
+      requests,
+    ],
+  );
 
   const processManagerAction = async (
     id: string,
