@@ -4,7 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 
 import { db } from "@/db/db";
-import { tasks } from "@/db/schema";
+import { timeOffRequests } from "@/db/schema";
 
 import { getOrCreateEmployeeByClerkId } from "./users";
 
@@ -19,9 +19,10 @@ export type CreateTaskActionState = {
     employeeId: string;
     type: string;
     startDate: string;
-    endDate?: string;
+    endDate: string;
     hours: number;
     note?: string;
+    status: "Pending";
   };
 };
 
@@ -124,6 +125,10 @@ function validateCreateTaskForm(formData: FormData): ValidationResult {
   };
 }
 
+function toDbDate(value: string) {
+  return value;
+}
+
 export async function createTaskAction(
   _prevState: CreateTaskActionState,
   formData: FormData,
@@ -132,7 +137,7 @@ export async function createTaskAction(
   if (!userId) {
     return {
       status: "error",
-      message: "You must be signed in to create a task.",
+      message: "You must be signed in to create a request.",
     };
   }
 
@@ -154,46 +159,52 @@ export async function createTaskAction(
       };
     }
 
-    const [task] = await db
-      .insert(tasks)
+    const endDateValue = validation.data.endDate ?? validation.data.startDate;
+
+    const [request] = await db
+      .insert(timeOffRequests)
       .values({
         employeeId: employee.id,
+        clerkUserId: userId,
+        status: "pending",
         type: validation.data.type,
-        startDate: validation.data.startDate,
-        endDate: validation.data.endDate ?? null,
+        startDate: toDbDate(validation.data.startDate),
+        endDate: toDbDate(endDateValue),
         hours: validation.data.hours,
         note: validation.data.note ?? null,
-        updatedAt: new Date(),
+        metadata: undefined,
       })
       .returning();
 
-    if (!task) {
+    if (!request) {
       return {
         status: "error",
-        message: "Failed to create the task.",
+        message: "Failed to create the time off request.",
       };
     }
 
     revalidatePath("/");
+    revalidatePath("/time-off");
 
     return {
       status: "success",
-      message: "Task created successfully.",
+      message: "Request submitted successfully.",
       task: {
-        id: task.id,
-        employeeId: task.employeeId,
-        type: task.type,
-        startDate: task.startDate,
-        endDate: task.endDate ?? undefined,
-        hours: task.hours,
-        note: task.note ?? undefined,
+        id: request.id,
+        employeeId: request.employeeId ?? employee.id,
+        type: request.type,
+        startDate: request.startDate,
+        endDate: request.endDate,
+        hours: request.hours ?? validation.data.hours,
+        note: request.note ?? undefined,
+        status: "Pending",
       },
     };
   } catch (error) {
-    console.error("Failed to create task", error);
+    console.error("Failed to create time off request", error);
     return {
       status: "error",
-      message: "Something went wrong while creating the task.",
+      message: "Something went wrong while creating the request.",
     };
   }
 }

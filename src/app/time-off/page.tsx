@@ -8,6 +8,7 @@ type CalendarStatus = "Pending" | "Approved" | "Denied";
 
 type CalendarRequest = {
   id: string;
+  employeeId: string | null;
   employee: string;
   role: string;
   type: string;
@@ -20,21 +21,43 @@ type CalendarRequest = {
   dateLabel?: string;
 };
 
-type ApprovedRequestSnapshot = {
+type TimeOffApiRecord = {
   id: string;
-  employee: string;
-  role: string;
+  status: string;
   type: string;
-  status: CalendarStatus;
-  startDateISO: string;
-  endDateISO: string;
+  startDate: string;
+  endDate: string;
   hours?: number;
-  notes?: string;
-  submitted?: string;
-  datesLabel?: string;
+  note?: string;
+  submittedAt?: string | null;
+  employee: {
+    id: string | null;
+    name: string;
+    role: string;
+  };
 };
 
-const APPROVED_REQUESTS_STORAGE_KEY = "trackmytime-approved-requests";
+function mapApiRecord(record: TimeOffApiRecord): CalendarRequest {
+  const normalizedStatus = record.status as CalendarStatus;
+  const safeStatus: CalendarStatus =
+    normalizedStatus === "Approved" || normalizedStatus === "Denied"
+      ? normalizedStatus
+      : "Pending";
+
+  return {
+    id: record.id,
+    employeeId: record.employee.id,
+    employee: record.employee.name,
+    role: record.employee.role,
+    type: record.type,
+    status: safeStatus,
+    start: record.startDate,
+    end: record.endDate,
+    hours: record.hours,
+    notes: record.note,
+    submitted: record.submittedAt ?? undefined,
+  };
+}
 
 const MANAGER_ROLE_TOKENS = ["manager", "director", "admin", "people ops"] as const;
 
@@ -54,99 +77,6 @@ const navigation: DashboardNavItem[] = [
   { label: "Overview", href: "/", active: false },
   { label: "Employees", href: "/employees", active: false },
   { label: "Time Off", href: "/time-off", active: true },
-];
-
-const timeOffRequests: CalendarRequest[] = [
-  {
-    id: "kayley-pto",
-    employee: "Kayley Manfredi",
-    role: "Product Manager",
-    type: "PTO",
-    status: "Approved",
-    start: "2025-01-11",
-    end: "2025-01-12",
-  },
-  {
-    id: "jordan-wfh",
-    employee: "Jordan Lee",
-    role: "Engineering Manager",
-    type: "WFH",
-    status: "Approved",
-    start: "2025-03-04",
-    end: "2025-03-08",
-  },
-  {
-    id: "priya-sick",
-    employee: "Priya Patel",
-    role: "QA Analyst",
-    type: "Sick",
-    status: "Approved",
-    start: "2025-05-20",
-    end: "2025-05-22",
-  },
-  {
-    id: "nina-pto",
-    employee: "Nina Chen",
-    role: "Customer Success Lead",
-    type: "PTO",
-    status: "Pending",
-    start: "2025-07-01",
-    end: "2025-07-05",
-  },
-  {
-    id: "omar-wfh",
-    employee: "Omar Hassan",
-    role: "People Operations",
-    type: "WFH",
-    status: "Denied",
-    start: "2025-09-09",
-    end: "2025-09-10",
-  },
-  {
-    id: "alex-fall-pto",
-    employee: "Alex Wilson",
-    role: "Product Designer",
-    type: "PTO",
-    status: "Approved",
-    start: "2025-10-07",
-    end: "2025-10-10",
-  },
-  {
-    id: "nina-autumn-pto",
-    employee: "Nina Chen",
-    role: "Customer Success Lead",
-    type: "PTO",
-    status: "Pending",
-    start: "2025-10-21",
-    end: "2025-10-24",
-  },
-  {
-    id: "omar-nov-pto",
-    employee: "Omar Hassan",
-    role: "People Operations",
-    type: "PTO",
-    status: "Approved",
-    start: "2025-11-05",
-    end: "2025-11-07",
-  },
-  {
-    id: "priya-holiday-pto",
-    employee: "Priya Patel",
-    role: "QA Analyst",
-    type: "PTO",
-    status: "Pending",
-    start: "2025-11-18",
-    end: "2025-11-21",
-  },
-  {
-    id: "sofia-pto",
-    employee: "Sofia Martinez",
-    role: "Senior Account Executive",
-    type: "PTO",
-    status: "Approved",
-    start: "2025-11-24",
-    end: "2025-11-29",
-  },
 ];
 
 const STATUS_CLASSES: Record<CalendarStatus, string> = {
@@ -292,9 +222,9 @@ export default function TimeOffCalendarPage() {
   const effectiveRoleMetadata = managerOverride ? "manager" : userRoleMetadata;
   const managerCanReview = managerOverride || hasManagerAccess(effectiveRoleMetadata);
 
-  const [dynamicApprovedRequests, setDynamicApprovedRequests] = useState<
-    CalendarRequest[]
-  >([]);
+  const [requests, setRequests] = useState<CalendarRequest[]>([]);
+  const [isLoadingRequests, setIsLoadingRequests] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [activeRequestContext, setActiveRequestContext] = useState<{
     request: CalendarRequest;
     dateKey: string;
@@ -318,126 +248,33 @@ export default function TimeOffCalendarPage() {
     });
   }, [activeRequestContext?.request.id]);
 
-  const loadSnapshots = useCallback(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
+  const fetchRequests = useCallback(async () => {
+    setIsLoadingRequests(true);
+    setFetchError(null);
     try {
-      const raw = window.localStorage.getItem(APPROVED_REQUESTS_STORAGE_KEY);
-      if (!raw) {
-        setDynamicApprovedRequests([]);
-        return;
+      const response = await fetch("/api/time-off", {
+        cache: "no-store",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to load time off requests.");
       }
-      const parsed = JSON.parse(raw) as ApprovedRequestSnapshot[];
-      if (!Array.isArray(parsed)) {
-        setDynamicApprovedRequests([]);
-        return;
-      }
-      const mapped = parsed
-        .filter(
-          (snapshot): snapshot is ApprovedRequestSnapshot =>
-            typeof snapshot === "object" &&
-            snapshot !== null &&
-            typeof snapshot.id === "string" &&
-            typeof snapshot.employee === "string" &&
-            typeof snapshot.role === "string" &&
-            typeof snapshot.type === "string" &&
-            typeof snapshot.startDateISO === "string" &&
-            typeof snapshot.endDateISO === "string",
-        )
-        .map<CalendarRequest>((snapshot) => ({
-          id: snapshot.id,
-          employee: snapshot.employee,
-          role: snapshot.role,
-          type: snapshot.type,
-          status: snapshot.status,
-          start: snapshot.startDateISO,
-          end: snapshot.endDateISO,
-          hours: snapshot.hours,
-          notes: snapshot.notes,
-          submitted: snapshot.submitted,
-          dateLabel: snapshot.datesLabel,
-        }));
-      setDynamicApprovedRequests(mapped);
+      const payload = (await response.json()) as {
+        requests: TimeOffApiRecord[];
+      };
+      setRequests(payload.requests.map(mapApiRecord));
     } catch (error) {
-      console.error("Failed to read approved requests", error);
-      setDynamicApprovedRequests([]);
+      const message =
+        error instanceof Error ? error.message : "Unable to load requests.";
+      setFetchError(message);
+    } finally {
+      setIsLoadingRequests(false);
     }
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    queueMicrotask(loadSnapshots);
-
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === APPROVED_REQUESTS_STORAGE_KEY) {
-        loadSnapshots();
-      }
-    };
-
-    window.addEventListener("storage", handleStorage);
-    return () => {
-      window.removeEventListener("storage", handleStorage);
-    };
-  }, [loadSnapshots]);
-
-  const persistSnapshotUpdate = useCallback(
-    (request: CalendarRequest, status: CalendarStatus) => {
-      if (typeof window === "undefined") {
-        return;
-      }
-
-      const snapshotPayload: ApprovedRequestSnapshot = {
-        id: request.id,
-        employee: request.employee,
-        role: request.role,
-        type: request.type,
-        status,
-        startDateISO: request.start,
-        endDateISO: request.end,
-        hours: request.hours,
-        notes: request.notes,
-        submitted: request.submitted,
-        datesLabel:
-          request.dateLabel ?? formatISODateRangeLabel(request.start, request.end),
-      };
-
-      try {
-        const raw = window.localStorage.getItem(APPROVED_REQUESTS_STORAGE_KEY);
-        if (!raw) {
-          window.localStorage.setItem(
-            APPROVED_REQUESTS_STORAGE_KEY,
-            JSON.stringify([snapshotPayload]),
-          );
-          return;
-        }
-        const parsed = JSON.parse(raw) as ApprovedRequestSnapshot[];
-        if (!Array.isArray(parsed)) {
-          window.localStorage.setItem(
-            APPROVED_REQUESTS_STORAGE_KEY,
-            JSON.stringify([snapshotPayload]),
-          );
-          return;
-        }
-        const index = parsed.findIndex((snapshot) => snapshot.id === request.id);
-        if (index >= 0) {
-          parsed[index] = { ...parsed[index], ...snapshotPayload };
-        } else {
-          parsed.push(snapshotPayload);
-        }
-        window.localStorage.setItem(
-          APPROVED_REQUESTS_STORAGE_KEY,
-          JSON.stringify(parsed),
-        );
-      } catch (error) {
-        console.error("Failed to update approved requests cache", error);
-      }
-    },
-    [],
-  );
+    void fetchRequests();
+  }, [fetchRequests]);
 
   useEffect(() => {
     if (!activeRequestContext) {
@@ -454,55 +291,38 @@ export default function TimeOffCalendarPage() {
     };
   }, [activeRequestContext]);
 
-  const combinedRequests = useMemo(() => {
-    const byId = new Map<string, CalendarRequest>();
-    for (const request of timeOffRequests) {
-      byId.set(request.id, request);
-    }
-    for (const request of dynamicApprovedRequests) {
-      byId.set(request.id, request);
-    }
-    return Array.from(byId.values());
-  }, [dynamicApprovedRequests]);
-
-  const updateRequestStatusLocally = useCallback(
-    (targetRequest: CalendarRequest, nextStatus: CalendarStatus) => {
-      setDynamicApprovedRequests((previous) => {
-        const index = previous.findIndex((item) => item.id === targetRequest.id);
-        const updatedEntry: CalendarRequest = { ...targetRequest, status: nextStatus };
-        if (index >= 0) {
-          const next = [...previous];
-          next[index] = { ...next[index], status: nextStatus };
-          return next;
-        }
-        return [...previous, updatedEntry];
-      });
-
-      setActiveRequestContext((previous) => {
-        if (!previous) {
-          return previous;
-        }
-        const updatedDayRequests = previous.dayRequests.map((dayRequest) =>
-          dayRequest.id === targetRequest.id
-            ? { ...dayRequest, status: nextStatus }
-            : dayRequest,
-        );
-        const updatedSelectedRequest =
-          previous.request.id === targetRequest.id
-            ? { ...previous.request, status: nextStatus }
-            : previous.request;
-        return {
-          dateKey: previous.dateKey,
-          dayRequests: updatedDayRequests,
-          request: updatedSelectedRequest,
-        };
-      });
-    },
-    [],
-  );
+  const updateRequestInState = useCallback((next: CalendarRequest) => {
+    setRequests((previous) => {
+      const index = previous.findIndex((request) => request.id === next.id);
+      if (index === -1) {
+        return [...previous, next];
+      }
+      const updated = [...previous];
+      updated[index] = next;
+      return updated;
+    });
+    setActiveRequestContext((previous) => {
+      if (!previous) {
+        return previous;
+      }
+      const updatedDayRequests = previous.dayRequests.map((request) =>
+        request.id === next.id ? next : request,
+      );
+      const updatedSelected =
+        previous.request.id === next.id ? next : previous.request;
+      return {
+        dateKey: previous.dateKey,
+        dayRequests: updatedDayRequests,
+        request: updatedSelected,
+      };
+    });
+  }, []);
 
   const processRequestStatusChange = useCallback(
-    (targetRequest: CalendarRequest, nextStatus: Exclude<CalendarStatus, "Pending">) => {
+    async (
+      targetRequest: CalendarRequest,
+      nextStatus: Exclude<CalendarStatus, "Pending">,
+    ) => {
       if (!isSignedIn || !user) {
         setManagerFeedback(MANAGER_MESSAGES.signIn);
         return;
@@ -522,53 +342,70 @@ export default function TimeOffCalendarPage() {
       setActioningRequestId(targetRequest.id);
 
       try {
-        const updatedRequest: CalendarRequest = {
-          ...targetRequest,
-          status: nextStatus,
+        const response = await fetch(`/api/time-off/${targetRequest.id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status: nextStatus }),
+          credentials: "include",
+        });
+
+        if (!response.ok) {
+          const errorPayload = (await response.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          throw new Error(
+            errorPayload?.error ?? MANAGER_MESSAGES.updateFailed,
+          );
+        }
+
+        const result = (await response.json()) as {
+          request: TimeOffApiRecord | null;
         };
 
-        updateRequestStatusLocally(updatedRequest, nextStatus);
-        persistSnapshotUpdate(updatedRequest, nextStatus);
-
-        setManagerFeedback(
-          `${updatedRequest.employee} marked as ${nextStatus.toLowerCase()} by ${userDisplayName}.`,
-        );
-
-        loadSnapshots();
+        if (result.request) {
+          const mapped = mapApiRecord(result.request);
+          updateRequestInState(mapped);
+          setManagerFeedback(
+            `${mapped.employee} marked as ${nextStatus.toLowerCase()} by ${userDisplayName}.`,
+          );
+        } else {
+          await fetchRequests();
+        }
       } catch (error) {
         setManagerFeedback(
           error instanceof Error
             ? error.message
             : MANAGER_MESSAGES.updateFailed,
         );
+      } finally {
+        setActioningRequestId(null);
       }
-
-      setActioningRequestId(null);
     },
     [
+      fetchRequests,
       isSignedIn,
-      user,
       managerCanReview,
+      updateRequestInState,
+      user,
       userDisplayName,
-      updateRequestStatusLocally,
-      persistSnapshotUpdate,
-      loadSnapshots,
     ],
   );
 
   const requestMap = useMemo(
-    () => buildRequestCalendarMap(combinedRequests),
-    [combinedRequests],
+    () => buildRequestCalendarMap(requests),
+    [requests],
   );
 
   const uniqueYears = useMemo(() => {
     const years = new Set<number>();
-    for (const request of combinedRequests) {
+    for (const request of requests) {
       years.add(new Date(request.start).getFullYear());
       years.add(new Date(request.end).getFullYear());
     }
     return Array.from(years).sort((a, b) => a - b);
-  }, [combinedRequests]);
+  }, [requests]);
 
   const today = new Date();
   const defaultYear = uniqueYears.includes(today.getFullYear())
@@ -578,14 +415,23 @@ export default function TimeOffCalendarPage() {
   const [viewYear, setViewYear] = useState(defaultYear);
   const [viewMonth, setViewMonth] = useState(today.getMonth());
 
+  useEffect(() => {
+    if (uniqueYears.length === 0) {
+      return;
+    }
+    setViewYear((current) =>
+      uniqueYears.includes(current) ? current : uniqueYears[0],
+    );
+  }, [uniqueYears]);
+
   const displayedRequests = useMemo(
     () =>
-      combinedRequests.filter((request) => {
+      requests.filter((request) => {
         const startYear = new Date(request.start).getFullYear();
         const endYear = new Date(request.end).getFullYear();
         return startYear === viewYear || endYear === viewYear;
       }),
-    [combinedRequests, viewYear],
+    [requests, viewYear],
   );
 
   const monthMatrix = useMemo(
@@ -705,6 +551,29 @@ export default function TimeOffCalendarPage() {
       }
     >
       <main className="space-y-8">
+        {fetchError ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+            <div className="flex items-start justify-between gap-3">
+              <span>{fetchError}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  void fetchRequests();
+                }}
+                className="rounded-lg border border-rose-300 bg-white px-3 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-100"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {isLoadingRequests && requests.length === 0 ? (
+          <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-sm text-indigo-600">
+            Loading time off requests…
+          </div>
+        ) : null}
+
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">

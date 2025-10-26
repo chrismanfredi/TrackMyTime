@@ -34,6 +34,22 @@ type TimeOffRequest = {
   notes?: string;
 };
 
+type TimeOffApiRecord = {
+  id: string;
+  status: string;
+  type: string;
+  startDate: string;
+  endDate: string;
+  hours?: number | null;
+  note?: string | null;
+  submittedAt?: string | null;
+  employee: {
+    id: string | null;
+    name: string;
+    role: string;
+  };
+};
+
 type NewRequestFormState = {
   type: string;
   startDate: string;
@@ -778,10 +794,12 @@ export default function Home() {
     copy.managerActivity.initialType,
   ]);
 
-  const pendingCount = useMemo(
-    () => requests.filter((request) => request.status === "Pending").length,
+  const pendingRequests = useMemo(
+    () => requests.filter((request) => request.status === "Pending"),
     [requests],
   );
+
+  const pendingCount = pendingRequests.length;
 
   const pendingActionCopy =
     pendingCount === 0
@@ -936,24 +954,13 @@ export default function Home() {
   };
 
   const applyRequestStatusChange = useCallback(
-    (id: string, status: RequestStatus): TimeOffRequest | null => {
-      const existing = requests.find((request) => request.id === id);
-      if (!existing) {
-        return null;
-      }
-
-      if (existing.status === status) {
-        return existing;
-      }
-
-      const updated: TimeOffRequest = { ...existing, status };
-
+    (updated: TimeOffRequest) => {
       setRequests((previous) =>
-        previous.map((request) => (request.id === id ? updated : request)),
+        previous.map((request) => (request.id === updated.id ? updated : request)),
       );
 
-      if (status !== "Pending") {
-        const statusKey: Exclude<RequestStatus, "Pending"> = status;
+      if (updated.status !== "Pending") {
+        const statusKey: Exclude<RequestStatus, "Pending"> = updated.status;
         addManagerActivity(
           copy.managerActivity.statusTitles[statusKey],
           copy.managerActivity.statusDetails[statusKey](
@@ -971,7 +978,6 @@ export default function Home() {
       copy.managerActivity.statusDetails,
       copy.managerActivity.statusTitles,
       getRequestTypeLabel,
-      requests,
     ],
   );
 
@@ -989,21 +995,72 @@ export default function Home() {
       return;
     }
 
+    const existing = requests.find((request) => request.id === id);
+    if (!existing) {
+      setManagerFeedback(copy.managerMessages.requestUpdateError);
+      return;
+    }
+
+    if (existing.status === status) {
+      setManagerFeedback(
+        copy.managerMessages.success(
+          existing.employee,
+          copy.statusLabels[status],
+          userDisplayName,
+        ),
+      );
+      return;
+    }
+
     setManagerFeedback(null);
     setActioningRequestId(id);
 
     try {
-      const updated = applyRequestStatusChange(id, status);
-      if (!updated) {
-        setManagerFeedback(copy.managerMessages.requestUpdateError);
-        return;
+      const response = await fetch(`/api/time-off/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status }),
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const errorPayload = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(errorPayload?.error ?? copy.managerMessages.updateFailed);
       }
 
-      if (status === "Approved") {
-        setOpenDetailsRequestId(updated.id);
-      } else if (openDetailsRequestId === updated.id) {
-        setOpenDetailsRequestId(null);
-      }
+      const result = (await response.json()) as {
+        request: TimeOffApiRecord | null;
+      };
+
+      const apiRequest = result.request;
+      const startDateISO = apiRequest?.startDate ?? existing.startDateISO;
+      const endDateISO = apiRequest?.endDate ?? existing.endDateISO;
+
+      const updated: TimeOffRequest = {
+        id: existing.id,
+        employee: apiRequest?.employee.name ?? existing.employee,
+        role: apiRequest?.employee.role ?? existing.role,
+        type: apiRequest?.type ?? existing.type,
+        status,
+        dates: formatDateRange(startDateISO, endDateISO),
+        startDateISO,
+        endDateISO,
+        hours:
+          typeof apiRequest?.hours === "number" ? apiRequest.hours : existing.hours,
+        submitted:
+          apiRequest?.submittedAt
+            ? dateFormatter.format(new Date(apiRequest.submittedAt))
+            : existing.submitted ?? formatSubmittedDate(),
+        notes: apiRequest?.note ?? existing.notes,
+      };
+
+      applyRequestStatusChange(updated);
+
+      setOpenDetailsRequestId(null);
 
       setManagerFeedback(
         copy.managerMessages.success(
@@ -1328,7 +1385,7 @@ export default function Home() {
                 <span>{copy.table.headings.dates}</span>
                 <span>{copy.table.headings.status}</span>
               </div>
-              {requests.map((request) => {
+              {pendingRequests.map((request) => {
                 const isExpanded = openDetailsRequestId === request.id;
                 const isProcessing = actioningRequestId === request.id;
                 const isPending = request.status === "Pending";
