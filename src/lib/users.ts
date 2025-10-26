@@ -44,9 +44,25 @@ async function createOrUpdateEmployeeFromClerk(
       ? clerkUser.publicMetadata
       : undefined;
 
+  const email =
+    normalized?.email ??
+    clerkUser.primaryEmailAddress?.emailAddress ??
+    clerkUser.emailAddresses?.[0]?.emailAddress ??
+    clerkUser.username ??
+    clerkUser.id;
+
+  const fullName =
+    normalized?.displayName ??
+    clerkUser.fullName ??
+    [clerkUser.firstName, clerkUser.lastName]
+      .filter((value): value is string => Boolean(value && value.length > 0))
+      .join(" ") ||
+    clerkUser.username ||
+    email;
+
   const updateValues: Record<string, unknown> = {
-    email: normalized?.email ?? null,
-    fullName: normalized?.displayName ?? null,
+    email,
+    fullName,
     photoUrl: normalized?.photoUrl ?? null,
     updatedAt: new Date(),
   };
@@ -65,8 +81,8 @@ async function createOrUpdateEmployeeFromClerk(
 
   const insertValues: typeof employees.$inferInsert = {
     clerkUserId,
-    email: normalized?.email ?? null,
-    fullName: normalized?.displayName ?? null,
+    email,
+    fullName,
     photoUrl: normalized?.photoUrl ?? null,
     role,
     updatedAt: new Date(),
