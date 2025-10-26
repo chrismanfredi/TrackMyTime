@@ -16,7 +16,6 @@ import {
   CREATE_TASK_INITIAL_STATE,
   type CreateTaskField,
 } from "@/lib/request-state";
-import { syncCurrentUser } from "@/lib/users";
 
 type RequestStatus = "Pending" | "Approved" | "Denied";
 
@@ -857,9 +856,32 @@ export default function Home() {
     let cancelled = false;
 
     void (async () => {
-      const result = await syncCurrentUser();
-      if (!cancelled && result.status === "error") {
-        console.error("Failed to sync Clerk user", result.message);
+      try {
+        const response = await fetch("/api/users/sync", {
+          method: "POST",
+        });
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as
+            | { message?: string }
+            | null;
+          const message =
+            payload?.message ?? "Failed to sync Clerk user.";
+          if (!cancelled) {
+            console.error(message);
+          }
+          return;
+        }
+        const result = (await response.json()) as {
+          status: "success" | "error";
+          message?: string;
+        };
+        if (!cancelled && result.status === "error") {
+          console.error(result.message ?? "Failed to sync Clerk user.");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Failed to sync Clerk user", error);
+        }
       }
     })();
 
