@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
+import { getAuth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 
 import { db } from "@/db/db";
@@ -8,6 +8,7 @@ import { timeOffRequests } from "@/db/schema";
 
 import { getOrCreateEmployeeByClerkId } from "./users";
 import type { CreateTaskActionState, CreateTaskField } from "./request-state";
+import { buildClerkRequestLike } from "./auth-request";
 
 type ValidatedTaskInput = {
   type: string;
@@ -112,7 +113,8 @@ export async function createTaskAction(
   _prevState: CreateTaskActionState,
   formData: FormData,
 ): Promise<CreateTaskActionState> {
-  const { userId } = await auth();
+  const requestLike = buildClerkRequestLike();
+  const { userId } = await getAuth(requestLike);
   if (!userId) {
     return {
       status: "error",

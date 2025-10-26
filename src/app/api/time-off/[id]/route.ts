@@ -1,8 +1,8 @@
 "use server";
 
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { getAuth, clerkClient } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { and, eq } from "drizzle-orm";
 
 import { db } from "@/db/db";
@@ -88,7 +88,7 @@ function mapDbRequest(row: {
   };
 }
 
-export async function PATCH(request: Request) {
+export async function PATCH(request: NextRequest) {
   const url = new URL(request.url);
   const segments = url.pathname.split("/").filter(Boolean);
   const requestId = segments[segments.length - 1] ?? "";
@@ -100,7 +100,7 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const { userId } = await auth();
+  const { userId } = await getAuth(request);
   if (!userId) {
     return NextResponse.json(
       { ok: false, error: "Authentication required." },
