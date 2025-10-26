@@ -88,12 +88,10 @@ function mapDbRequest(row: {
   };
 }
 
-export async function PATCH(
-  request: Request,
-  context: { params: Record<string, string | string[]> },
-) {
-  const idValue = context?.params?.id;
-  const requestId = Array.isArray(idValue) ? idValue[0] : idValue;
+export async function PATCH(request: Request) {
+  const url = new URL(request.url);
+  const segments = url.pathname.split("/").filter(Boolean);
+  const requestId = segments[segments.length - 1] ?? "";
 
   if (!requestId || typeof requestId !== "string") {
     return NextResponse.json(
