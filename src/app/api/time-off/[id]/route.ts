@@ -1,6 +1,6 @@
 "use server";
 
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { getAuth, clerkClient } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
@@ -100,7 +100,7 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const { userId } = auth();
+  const { userId } = await getAuth();
   if (!userId) {
     return NextResponse.json(
       { ok: false, error: "Authentication required." },
