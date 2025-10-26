@@ -2,7 +2,7 @@
 
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 
 import { db } from "@/db/db";
@@ -89,10 +89,9 @@ function mapDbRequest(row: {
 }
 
 export async function PATCH(
-  request: NextRequest,
-  context: { params: { id: string } },
+  request: Request,
+  { params }: { params: { id: string } },
 ) {
-  const { params } = context;
   const { userId } = auth();
   if (!userId) {
     return NextResponse.json(
