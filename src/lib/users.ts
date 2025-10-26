@@ -1,6 +1,6 @@
-<<<<<<< HEAD
 "use server";
 
+import type { User } from "@clerk/nextjs/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
 
@@ -26,18 +26,7 @@ async function createOrUpdateEmployeeFromClerk(
 ): Promise<EmployeeRecord | null> {
   const clerkUser = await clerkClient.users.getUser(clerkUserId);
 
-  const email =
-    clerkUser.primaryEmailAddress?.emailAddress ??
-    clerkUser.emailAddresses?.[0]?.emailAddress ??
-    null;
-  const fullName =
-    clerkUser.fullName ??
-    [clerkUser.firstName, clerkUser.lastName]
-      .filter((value): value is string => Boolean(value && value.length > 0))
-      .join(" ") ||
-    clerkUser.username ??
-    email;
-  const photoUrl = clerkUser.imageUrl ?? null;
+  const normalized = await normalizeClerkUser(clerkUser);
   const roleMetadata = clerkUser.publicMetadata?.role;
   const teamMetadata = clerkUser.publicMetadata?.team;
   const role =
@@ -55,9 +44,9 @@ async function createOrUpdateEmployeeFromClerk(
       : undefined;
 
   const updateValues: Record<string, unknown> = {
-    email,
-    fullName,
-    photoUrl,
+    email: normalized?.email ?? null,
+    fullName: normalized?.displayName ?? null,
+    photoUrl: normalized?.photoUrl ?? null,
     updatedAt: new Date(),
   };
 
@@ -75,9 +64,9 @@ async function createOrUpdateEmployeeFromClerk(
 
   const insertValues: typeof employees.$inferInsert = {
     clerkUserId,
-    email,
-    fullName,
-    photoUrl,
+    email: normalized?.email ?? null,
+    fullName: normalized?.displayName ?? null,
+    photoUrl: normalized?.photoUrl ?? null,
     role,
     updatedAt: new Date(),
   };
@@ -132,8 +121,7 @@ export async function syncCurrentUser(): Promise<SyncCurrentUserResult> {
     console.error("Failed to sync Clerk user", error);
     return { status: "error", message: "Failed to sync Clerk user." };
   }
-=======
-import type { User } from "@clerk/nextjs/server";
+}
 
 type NullableString = string | null | undefined;
 
@@ -148,10 +136,10 @@ export type NormalizedClerkUser = {
   role: string | null;
 };
 
-export function normalizeClerkUser(
+export async function normalizeClerkUser(
   clerkUser: User | null | undefined,
   explicitEmail?: NullableString,
-): NormalizedClerkUser | null {
+): Promise<NormalizedClerkUser | null> {
   if (!clerkUser) {
     return null;
   }
@@ -167,18 +155,18 @@ export function normalizeClerkUser(
     null;
 
   const fallbackIdentifier =
-    clerkUser.username ??
-    primaryEmail ??
-    clerkUser.id;
+    clerkUser.username ?? primaryEmail ?? clerkUser.id;
 
   const displayName =
     isNonEmptyString(fullName) ? fullName : fallbackIdentifier ?? "Unknown user";
 
   const roleMetadata = clerkUser.publicMetadata?.role;
   const role =
-    typeof roleMetadata === "string" ? roleMetadata : Array.isArray(roleMetadata)
-      ? roleMetadata.join(", ")
-      : null;
+    typeof roleMetadata === "string"
+      ? roleMetadata
+      : Array.isArray(roleMetadata)
+        ? roleMetadata.join(", ")
+        : null;
 
   return {
     id: clerkUser.id,
@@ -187,5 +175,4 @@ export function normalizeClerkUser(
     photoUrl: clerkUser.imageUrl ?? null,
     role,
   };
->>>>>>> 4f2d6c4 (10/26)
 }
