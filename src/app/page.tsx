@@ -937,43 +937,34 @@ export default function Home() {
 
   const applyRequestStatusChange = useCallback(
     (id: string, status: RequestStatus): TimeOffRequest | null => {
-      let foundRequest: TimeOffRequest | null = null;
-      let statusChanged = false;
-
-      const nextRequests = requests.map((request) => {
-        if (request.id !== id) {
-          return request;
-        }
-        if (request.status === status) {
-          foundRequest = request;
-          return request;
-        }
-        const updated = { ...request, status };
-        foundRequest = updated;
-        statusChanged = true;
-        return updated;
-      });
-
-      if (!foundRequest) {
+      const existing = requests.find((request) => request.id === id);
+      if (!existing) {
         return null;
       }
 
-      if (statusChanged) {
-        setRequests(nextRequests);
-
-        if (status !== "Pending") {
-          addManagerActivity(
-            copy.managerActivity.statusTitles[status],
-            copy.managerActivity.statusDetails[status](
-              foundRequest.employee,
-              getRequestTypeLabel(foundRequest.type),
-              foundRequest.dates,
-            ),
-          );
-        }
+      if (existing.status === status) {
+        return existing;
       }
 
-      return foundRequest;
+      const updated: TimeOffRequest = { ...existing, status };
+
+      setRequests((previous) =>
+        previous.map((request) => (request.id === id ? updated : request)),
+      );
+
+      if (status !== "Pending") {
+        const statusKey: Exclude<RequestStatus, "Pending"> = status;
+        addManagerActivity(
+          copy.managerActivity.statusTitles[statusKey],
+          copy.managerActivity.statusDetails[statusKey](
+            updated.employee,
+            getRequestTypeLabel(updated.type),
+            updated.dates,
+          ),
+        );
+      }
+
+      return updated;
     },
     [
       addManagerActivity,
