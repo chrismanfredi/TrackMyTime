@@ -8,6 +8,13 @@
       "when": 1761353144133,
       "tag": "0000_special_obadiah_stane",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1761516082573,
+      "tag": "0001_pretty_gladiator",
+      "breakpoints": true
     }
   ]
 }
