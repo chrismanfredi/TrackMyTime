@@ -88,10 +88,23 @@ function mapDbRequest(row: {
   };
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } },
-) {
+type RouteContext = {
+  params?: {
+    id?: unknown;
+  };
+};
+
+export async function PATCH(request: Request, context: RouteContext) {
+  const params = context.params ?? {};
+  const requestId = params.id;
+
+  if (typeof requestId !== "string" || requestId.length === 0) {
+    return NextResponse.json(
+      { ok: false, error: "Request id is required." },
+      { status: 400 },
+    );
+  }
+
   const { userId } = auth();
   if (!userId) {
     return NextResponse.json(
@@ -158,7 +171,7 @@ export async function PATCH(
       status: normalizedStatus,
       lastUpdatedAt: new Date(),
     })
-    .where(eq(timeOffRequests.id, params.id))
+    .where(eq(timeOffRequests.id, requestId))
     .returning();
 
   if (!updatedRequest) {
