@@ -88,17 +88,13 @@ function mapDbRequest(row: {
   };
 }
 
-type RouteContext = {
-  params?: {
-    id?: unknown;
-  };
-};
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } },
+) {
+  const requestId = params?.id;
 
-export async function PATCH(request: Request, context: RouteContext) {
-  const params = context.params ?? {};
-  const requestId = params.id;
-
-  if (typeof requestId !== "string" || requestId.length === 0) {
+  if (!requestId || typeof requestId !== "string") {
     return NextResponse.json(
       { ok: false, error: "Request id is required." },
       { status: 400 },
