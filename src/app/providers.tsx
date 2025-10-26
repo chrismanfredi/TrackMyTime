@@ -12,16 +12,20 @@ export function Providers({ children }: ProvidersProps) {
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ||
     process.env.CLERK_PUBLISHABLE_KEY;
 
-  if (!publishableKey) {
-    if (process.env.NODE_ENV !== "production") {
-      console.warn(
-        "Clerk publishable key is missing. ClerkProvider will not be initialized.",
-      );
-    }
-    return <>{children}</>;
-  }
-
   return (
-    <ClerkProvider publishableKey={publishableKey}>{children}</ClerkProvider>
+    <ClerkProvider
+      publishableKey={
+        publishableKey ??
+        (process.env.NODE_ENV !== "production"
+          ? "pk_test_missing_publishable_key"
+          : (() => {
+              throw new Error(
+                "Clerk publishable key is required in production environment.",
+              );
+            })())
+      }
+    >
+      {children}
+    </ClerkProvider>
   );
 }
