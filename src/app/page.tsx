@@ -11,11 +11,11 @@ import {
   useState,
 } from "react";
 
+import { createTaskAction } from "@/lib/requests";
 import {
   CREATE_TASK_INITIAL_STATE,
-  CreateTaskField,
-  createTaskAction,
-} from "@/lib/requests";
+  type CreateTaskField,
+} from "@/lib/request-state";
 import { syncCurrentUser } from "@/lib/users";
 
 type RequestStatus = "Pending" | "Approved" | "Denied";
