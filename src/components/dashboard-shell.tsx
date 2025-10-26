@@ -155,7 +155,7 @@ export function DashboardShell({
                 <Link
                   key={item.label}
                   href={item.href}
-                  onClick={() => setMobileNavOpen(false)}
+                  onClick={close}
                   className={`flex items-center justify-between rounded-xl px-4 py-3 text-sm font-medium transition ${
                     item.active
                       ? "bg-indigo-600 text-white shadow-sm shadow-indigo-200/50"
