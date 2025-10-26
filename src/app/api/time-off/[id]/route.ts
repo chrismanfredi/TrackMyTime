@@ -90,9 +90,10 @@ function mapDbRequest(row: {
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } },
+  context: { params: Record<string, string | string[]> },
 ) {
-  const requestId = params?.id;
+  const idValue = context?.params?.id;
+  const requestId = Array.isArray(idValue) ? idValue[0] : idValue;
 
   if (!requestId || typeof requestId !== "string") {
     return NextResponse.json(
