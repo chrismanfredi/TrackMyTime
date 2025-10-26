@@ -1,6 +1,6 @@
 "use server";
 
-import { getAuth } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 
 import { db } from "@/db/db";
@@ -112,7 +112,7 @@ export async function createTaskAction(
   _prevState: CreateTaskActionState,
   formData: FormData,
 ): Promise<CreateTaskActionState> {
-  const { userId } = await getAuth(undefined);
+  const { userId } = await auth();
   if (!userId) {
     return {
       status: "error",
