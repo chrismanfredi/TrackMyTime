@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import type { Route } from "next";
+import { useDashboardNav } from "@/hooks/use-dashboard-nav";
 
 export type DashboardNavItem = {
   label: string;
@@ -31,7 +32,7 @@ export function DashboardShell({
   actions,
   languageSelector,
 }: DashboardShellProps) {
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const { isOpen: mobileNavOpen, close } = useDashboardNav();
 
   useEffect(() => {
     if (!mobileNavOpen) {
@@ -39,14 +40,14 @@ export function DashboardShell({
     }
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setMobileNavOpen(false);
+        close();
       }
     };
     document.addEventListener("keydown", handleEscape);
     return () => {
       document.removeEventListener("keydown", handleEscape);
     };
-  }, [mobileNavOpen]);
+  }, [close, mobileNavOpen]);
 
   return (
     <div className="min-h-screen bg-zinc-100">
@@ -86,36 +87,16 @@ export function DashboardShell({
 
           <div className="flex flex-1 flex-col">
             <header className="flex flex-col gap-4 border-b border-zinc-200 bg-white px-6 py-6 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-indigo-500">
-                    {badge ?? "Dashboard"}
-                  </p>
-                  <h2 className="mt-2 text-2xl font-semibold text-zinc-900">
-                    {title}
-                  </h2>
-                  {subtitle ? (
-                    <p className="text-sm text-zinc-500">{subtitle}</p>
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setMobileNavOpen(true)}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 text-zinc-600 transition hover:border-indigo-300 hover:text-indigo-600 lg:hidden"
-                  aria-label="Open navigation menu"
-                >
-                  <span className="sr-only">Open navigation</span>
-                  <svg
-                    aria-hidden="true"
-                    className="h-5 w-5"
-                    viewBox="0 0 20 20"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                  >
-                    <path d="M3 6h14M3 10h14M3 14h14" strokeLinecap="round" />
-                  </svg>
-                </button>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-indigo-500">
+                  {badge ?? "Dashboard"}
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold text-zinc-900">
+                  {title}
+                </h2>
+                {subtitle ? (
+                  <p className="text-sm text-zinc-500">{subtitle}</p>
+                ) : null}
               </div>
               {actions ? (
                 <div className="flex w-full flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-4">
@@ -135,7 +116,7 @@ export function DashboardShell({
         <div className="fixed inset-0 z-50 lg:hidden" aria-modal="true" role="dialog">
           <div
             className="absolute inset-0 bg-zinc-900/40 backdrop-blur-sm"
-            onClick={() => setMobileNavOpen(false)}
+            onClick={close}
           />
           <div className="absolute inset-y-0 right-0 flex w-72 max-w-full flex-col border-l border-zinc-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4">
@@ -149,7 +130,7 @@ export function DashboardShell({
               </div>
               <button
                 type="button"
-                onClick={() => setMobileNavOpen(false)}
+                onClick={close}
                 className="flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-200 text-zinc-500 transition hover:border-indigo-300 hover:text-indigo-600"
                 aria-label="Close navigation menu"
               >

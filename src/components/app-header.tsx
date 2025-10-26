@@ -8,9 +8,11 @@ import {
   UserButton,
   useUser,
 } from "@clerk/nextjs";
+import { useDashboardNav } from "@/hooks/use-dashboard-nav";
 
 export function AppHeader() {
   const { user } = useUser();
+  const { open } = useDashboardNav();
   const displayName =
     user?.fullName ??
     user?.username ??
@@ -38,6 +40,24 @@ export function AppHeader() {
             {displayName}
           </span>
           <UserButton />
+          <button
+            type="button"
+            onClick={open}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 text-zinc-600 transition hover:border-indigo-300 hover:text-indigo-600 lg:hidden"
+            aria-label="Open navigation menu"
+          >
+            <span className="sr-only">Open navigation</span>
+            <svg
+              aria-hidden="true"
+              className="h-5 w-5"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+            >
+              <path d="M3 6h14M3 10h14M3 14h14" strokeLinecap="round" />
+            </svg>
+          </button>
         </SignedIn>
       </div>
     </header>

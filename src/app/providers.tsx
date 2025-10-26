@@ -2,6 +2,7 @@
 
 import { ClerkProvider } from "@clerk/nextjs";
 import { ReactNode } from "react";
+import { DashboardNavProvider } from "@/hooks/use-dashboard-nav";
 
 type ProvidersProps = {
   children: ReactNode;
@@ -25,7 +26,7 @@ export function Providers({ children }: ProvidersProps) {
             })())
       }
     >
-      {children}
+      <DashboardNavProvider>{children}</DashboardNavProvider>
     </ClerkProvider>
   );
 }
