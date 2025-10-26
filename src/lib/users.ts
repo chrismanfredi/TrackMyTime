@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 "use server";
 
 import { auth, clerkClient } from "@clerk/nextjs/server";
@@ -131,4 +132,60 @@ export async function syncCurrentUser(): Promise<SyncCurrentUserResult> {
     console.error("Failed to sync Clerk user", error);
     return { status: "error", message: "Failed to sync Clerk user." };
   }
+=======
+import type { User } from "@clerk/nextjs/server";
+
+type NullableString = string | null | undefined;
+
+const isNonEmptyString = (value: NullableString): value is string =>
+  typeof value === "string" && value.trim().length > 0;
+
+export type NormalizedClerkUser = {
+  id: string;
+  displayName: string;
+  email: string | null;
+  photoUrl: string | null;
+  role: string | null;
+};
+
+export function normalizeClerkUser(
+  clerkUser: User | null | undefined,
+  explicitEmail?: NullableString,
+): NormalizedClerkUser | null {
+  if (!clerkUser) {
+    return null;
+  }
+
+  const fullName = [clerkUser.firstName, clerkUser.lastName]
+    .filter((value): value is string => isNonEmptyString(value))
+    .join(" ");
+
+  const primaryEmail =
+    explicitEmail ??
+    clerkUser.primaryEmailAddress?.emailAddress ??
+    clerkUser.emailAddresses?.[0]?.emailAddress ??
+    null;
+
+  const fallbackIdentifier =
+    clerkUser.username ??
+    primaryEmail ??
+    clerkUser.id;
+
+  const displayName =
+    isNonEmptyString(fullName) ? fullName : fallbackIdentifier ?? "Unknown user";
+
+  const roleMetadata = clerkUser.publicMetadata?.role;
+  const role =
+    typeof roleMetadata === "string" ? roleMetadata : Array.isArray(roleMetadata)
+      ? roleMetadata.join(", ")
+      : null;
+
+  return {
+    id: clerkUser.id,
+    displayName,
+    email: primaryEmail,
+    photoUrl: clerkUser.imageUrl ?? null,
+    role,
+  };
+>>>>>>> 4f2d6c4 (10/26)
 }
