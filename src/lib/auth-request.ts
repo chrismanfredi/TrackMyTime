@@ -5,9 +5,10 @@ export function buildClerkRequestLike() {
   const cookieStore = cookies();
 
   const headerMap = new Map<string, string[]>();
-  headerList.forEach((value, key) => {
+  const entries = headerList.entries();
+  for (const [key, value] of entries) {
     headerMap.set(key, [value]);
-  });
+  }
 
   return {
     headers: Object.fromEntries(headerMap),
