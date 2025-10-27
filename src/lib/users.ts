@@ -1,12 +1,11 @@
 "use server";
 
 import type { User } from "@clerk/nextjs/server";
-import { getAuth, clerkClient } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/db/db";
 import { employees } from "@/db/schema";
-import { buildClerkRequest } from "./auth-request";
 
 export type EmployeeRecord = typeof employees.$inferSelect;
 
@@ -146,8 +145,7 @@ export async function syncEmployeeForUser(
 }
 
 export async function syncCurrentUser(): Promise<SyncCurrentUserResult> {
-  const request = buildClerkRequest();
-  const { userId } = await getAuth(request);
+  const { userId } = await auth();
   if (!userId) {
     return { status: "error", message: "Not authenticated." };
   }
