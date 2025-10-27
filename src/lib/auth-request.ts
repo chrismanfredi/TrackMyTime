@@ -5,8 +5,7 @@ export function buildClerkRequestLike() {
   const cookieStore = cookies();
 
   const headerMap = new Map<string, string[]>();
-  const entries = headerList.entries();
-  for (const [key, value] of entries) {
+  for (const [key, value] of headerList) {
     headerMap.set(key, [value]);
   }
 
