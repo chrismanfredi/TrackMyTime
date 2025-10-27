@@ -7,8 +7,8 @@ export function buildClerkRequest(): Request {
   const requestHeaders = new Headers(headerList as unknown as HeadersInit);
 
   const cookieEntries =
-    typeof cookieStore.getAll === "function"
-      ? cookieStore.getAll()
+    typeof (cookieStore as { getAll?: unknown }).getAll === "function"
+      ? ((cookieStore as unknown as { getAll: () => { name: string; value: string }[] }).getAll())
       : Array.from(cookieStore.entries()).map(([name, value]) => ({
           name,
           value: Array.isArray(value) ? value.join("") : value,
