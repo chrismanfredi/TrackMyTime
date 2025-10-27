@@ -1,17 +1,17 @@
 import { cookies, headers } from "next/headers";
-import { getAuth } from "@clerk/nextjs/server";
+import type { RequestLike } from "@clerk/nextjs/dist/types/server/types";
 
-export function buildClerkRequestLike(): Parameters<typeof getAuth>[0] {
+export function buildClerkRequestLike(): RequestLike {
   const headerList = headers();
   const cookieStore = cookies();
 
+  const headerMap = new Map<string, string[]>();
+  headerList.forEach((value, key) => {
+    headerMap.set(key, [value]);
+  });
+
   return {
-    headers: headerList,
-    cookies: {
-      get(name: string) {
-        const cookie = cookieStore.get(name);
-        return cookie ? { value: cookie.value } : undefined;
-      },
-    },
-  };
+    headers: Object.fromEntries(headerMap),
+    cookies: cookieStore,
+  } as RequestLike;
 }
