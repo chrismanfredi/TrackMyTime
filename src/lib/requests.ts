@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
+import { clerkClient } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 
 import { db } from "@/db/db";
@@ -112,11 +112,22 @@ export async function createTaskAction(
   _prevState: CreateTaskActionState,
   formData: FormData,
 ): Promise<CreateTaskActionState> {
-  const { userId } = await auth();
-  if (!userId) {
+  const rawUserId = formData.get("userId");
+  if (typeof rawUserId !== "string" || rawUserId.trim().length === 0) {
     return {
       status: "error",
-      message: "You must be signed in to create a request.",
+      message: "Unable to identify the current user.",
+    };
+  }
+
+  let user;
+  try {
+    user = await clerkClient.users.getUser(rawUserId);
+  } catch (error) {
+    console.error("Failed to fetch Clerk user", error);
+    return {
+      status: "error",
+      message: "Unable to verify the current user.",
     };
   }
 
@@ -130,7 +141,7 @@ export async function createTaskAction(
   }
 
   try {
-    const employee = await getOrCreateEmployeeByClerkId(userId);
+    const employee = await getOrCreateEmployeeByClerkId(user.id);
     if (!employee) {
       return {
         status: "error",
@@ -144,7 +155,7 @@ export async function createTaskAction(
       .insert(timeOffRequests)
       .values({
         employeeId: employee.id,
-        clerkUserId: userId,
+        clerkUserId: user.id,
         status: "pending",
         type: validation.data.type,
         startDate: toDbDate(validation.data.startDate),

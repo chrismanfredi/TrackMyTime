@@ -1303,6 +1303,7 @@ export default function Home() {
               <p className="text-xs text-rose-600">{requestFieldErrors.note}</p>
             )}
           </div>
+          <input type="hidden" name="userId" value={user?.id ?? ""} />
           <button
             type="submit"
             formAction={createTaskFormAction}
