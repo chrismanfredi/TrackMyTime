@@ -1,7 +1,6 @@
 import { cookies, headers } from "next/headers";
-import type { RequestLike } from "@clerk/nextjs/dist/types/server/types";
 
-export function buildClerkRequestLike(): RequestLike {
+export function buildClerkRequestLike() {
   const headerList = headers();
   const cookieStore = cookies();
 
@@ -13,5 +12,5 @@ export function buildClerkRequestLike(): RequestLike {
   return {
     headers: Object.fromEntries(headerMap),
     cookies: cookieStore,
-  } as RequestLike;
+  };
 }
