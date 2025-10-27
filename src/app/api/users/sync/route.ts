@@ -1,10 +1,17 @@
-"use server";
+import { getAuth } from "@clerk/nextjs/server";
+import { NextRequest, NextResponse } from "next/server";
 
-import { NextResponse } from "next/server";
+import { syncEmployeeForUser } from "@/lib/users";
 
-import { syncCurrentUser } from "@/lib/users";
+export async function POST(request: NextRequest) {
+  const { userId } = getAuth(request);
+  if (!userId) {
+    return NextResponse.json(
+      { status: "error", message: "Not authenticated." },
+      { status: 401 },
+    );
+  }
 
-export async function POST() {
-  const result = await syncCurrentUser();
+  const result = await syncEmployeeForUser(userId);
   return NextResponse.json(result);
 }

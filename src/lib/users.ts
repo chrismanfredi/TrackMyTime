@@ -130,12 +130,9 @@ export async function getOrCreateEmployeeByClerkId(
   return createOrUpdateEmployeeFromClerk(clerkUserId);
 }
 
-export async function syncCurrentUser(): Promise<SyncCurrentUserResult> {
-  const { userId } = await auth();
-  if (!userId) {
-    return { status: "error", message: "Not authenticated." };
-  }
-
+export async function syncEmployeeForUser(
+  userId: string,
+): Promise<SyncCurrentUserResult> {
   try {
     const employee = await createOrUpdateEmployeeFromClerk(userId);
     if (!employee) {
@@ -146,6 +143,15 @@ export async function syncCurrentUser(): Promise<SyncCurrentUserResult> {
     console.error("Failed to sync Clerk user", error);
     return { status: "error", message: "Failed to sync Clerk user." };
   }
+}
+
+export async function syncCurrentUser(): Promise<SyncCurrentUserResult> {
+  const { userId } = await auth();
+  if (!userId) {
+    return { status: "error", message: "Not authenticated." };
+  }
+
+  return syncEmployeeForUser(userId);
 }
 
 type NullableString = string | null | undefined;
